@@ -5,9 +5,21 @@ black hole, and what they do to **continuum reverberation**: response functions,
 lag spectra, disc SEDs and mock light curves that
 [pycream2](https://github.com/drds1/pycream2) can fit.
 
+![Animated SPH disc with an embedded body: surface density, lit photosphere, response functions and side view](docs/images/disc_animation.gif)
+
+*`scripts/animate_disc.py`: 8000 SPH particles around a 5×10^7 M_⊙ black hole
+with an embedded body of mass ratio q = 5×10^-3 at 2.2 light-days, over four of
+its orbits (about 4.2 years). The body launches a spiral wake and starts to
+carve a horseshoe-shaped gap. Each frame is reprocessed as a frozen
+snapshot: the lit photosphere (dark where shadowed or optically thin) and the
+response functions at 1500, 5100 and 8000 Å (dotted: t = 0). The wobble in the
+optical responses (±0.1 d frame to frame) is particle noise at this
+resolution, not a measured effect.*
+
 The motivation is the **disc-size problem**. Continuum lags are 2–5× longer than
 a thin disc of the AGN's luminosity allows (see
-[`docs/literature_review.md`](docs/literature_review.md)). Many proposed fixes
+[`docs/literature_review.md`](docs/literature_review.md); for how the simulations
+work, see [`docs/physics.md`](docs/physics.md)). Many proposed fixes
 are about *structure*: rims, warps, puffed-up outer discs, embedded stars and
 compact objects, binaries. Structure comes from dynamics, so this repo
 simulates the dynamics and then asks what the light echo looks like.
@@ -44,7 +56,10 @@ scripts/
   geometry_responses.py analytic surfaces compared (figure above)
   embedded_body.py      SPH disc +/- an embedded massive body -> photosphere -> lags
   mock_campaign.py      simulated disc -> light curves + a ready-to-run pycream2 fit command
+  animate_disc.py       SPH disc + embedded body -> animated density, photosphere and responses (GIF)
+  physics_figures.py    figures for docs/physics.md
 docs/
+  physics.md            how the physics is simulated: N-body, SPH, photosphere, irradiation, response
   literature_review.md  open problems, candidate explanations, what needs to happen
   roadmap.md            experiments E1-E7 and planned code
 tests/                  physics checks (see below)
@@ -52,15 +67,43 @@ tests/                  physics checks (see below)
 
 ## Install
 
+With [Poetry](https://python-poetry.org) (the lock file pins a tested set):
+
 ```bash
 cd agn-disc-sim
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
+poetry install -E dev            # numpy, scipy, matplotlib + pytest
+poetry run pytest                # 18 physics checks, a few seconds
+poetry run python scripts/geometry_responses.py
 ```
 
-Only numpy, scipy and matplotlib are needed. `.[nbody]` adds REBOUND and
-`.[phantom]` adds sarracen, for the production back ends on the roadmap.
+or with pip: `python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`.
+
+Only numpy, scipy and matplotlib are needed. The extras `-E nbody` (REBOUND)
+and `-E phantom` (sarracen) are for the production back ends on the roadmap.
+`animate_disc.py` uses `ffmpeg` for a compact GIF if it is installed, and
+Pillow otherwise.
+
+## Running long simulations on Kaggle
+
+The laptop is for tests, figures and short runs. Long SPH runs go to Kaggle's
+free CPU notebooks (4 cores, 12 hours a session, up to 5 sessions at once, no
+payment details). `remote/build.py` turns a named batch of commands into a
+private notebook that carries the working tree's `discsim/` and `scripts/` as
+cells, so nothing has to be committed or pushed first. `remote/runs.py` pushes
+it, waits, downloads the output and keeps a ledger of the compute used.
+
+One-off setup: a Kaggle account with an API token in `~/.kaggle/` (see
+kaggle.com, **Settings**, **API**), then `poetry install -E dev --with remote`
+and check with `poetry run kaggle config view`.
+
+```bash
+poetry run python remote/runs.py push test           # ~2 min smoke test
+poetry run python remote/runs.py push e2_q5e-3 e2_q1e-3 e2_q1e-2 anim_hires
+poetry run python remote/runs.py wait                # downloads into outputs/kaggle/<batch>_v<N>/
+poetry run python remote/runs.py usage               # hours used
+```
+
+Batches are defined in `BATCHES` in `remote/build.py`; add one per new experiment.
 
 ## Quick start
 

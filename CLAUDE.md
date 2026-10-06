@@ -34,4 +34,8 @@ sibling repo `../echofit` (pycream2).
   seconds; long runs belong in `scripts/`.
 - Outputs go to `outputs/` (git-ignored). Figures for the docs go in
   `docs/images/`.
-- Heavy runs: Kaggle, as in echofit, or Phantom on a cluster.
+- Environment: Poetry (`poetry install -E dev --with remote`); run everything with `poetry run`.
+- Heavy runs: Kaggle, as in echofit, or Phantom on a cluster. `remote/build.py` (batches in
+  `BATCHES`) builds a private notebook that embeds the working tree's `discsim/` and `scripts/`;
+  `remote/runs.py push|wait|usage` pushes, downloads into `outputs/kaggle/` and keeps the ledger
+  `remote/usage.json`. The laptop has 2 cores and 8 GB: keep it for tests, figures and short runs.

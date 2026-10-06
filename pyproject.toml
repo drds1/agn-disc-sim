@@ -19,10 +19,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ipykernel"]
 # production-scale back ends (see docs/roadmap.md)
 nbody = ["rebound>=4.0"]
 phantom = ["sarracen>=1.2"]
+
+# Kaggle CLI, for long simulations on Kaggle's free notebooks (remote/build.py,
+# remote/runs.py): `poetry install --with remote`. A Poetry group rather than an
+# extra, so it never appears in the package's metadata.
+[tool.poetry.group.remote]
+optional = true
+
+[tool.poetry.group.remote.dependencies]
+kaggle = ">=1.6"
 
 [tool.setuptools.packages.find]
 include = ["discsim*"]

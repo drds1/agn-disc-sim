@@ -9,3 +9,5 @@ venv/
 .ipynb_checkpoints/
 outputs/
 *.npz
+remote/build/
+remote/usage.json
