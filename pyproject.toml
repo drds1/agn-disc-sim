@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "discsim"
+version = "0.1.0"
+description = "N-body / SPH simulations of AGN accretion discs and their continuum reverberation signatures"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "David Starkey" }]
+keywords = ["AGN", "accretion disc", "reverberation mapping", "N-body", "SPH", "astrophysics"]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+# production-scale back ends (see docs/roadmap.md)
+nbody = ["rebound>=4.0"]
+phantom = ["sarracen>=1.2"]
+
+[tool.setuptools.packages.find]
+include = ["discsim*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
