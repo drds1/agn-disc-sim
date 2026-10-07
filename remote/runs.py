@@ -79,7 +79,12 @@ def push(batches) -> None:
 def finish(run: dict, status: str) -> None:
     """Download a finished run's output and record its runtime."""
     dest = OUT / f"{run['batch']}_v{run['version']}"
-    kaggle("kernels", "output", run["slug"], "-p", str(dest))
+    # the tarball and the logs only: fetching hundreds of snapshots and frames one by one is slow and can hang
+    subprocess.run(["kaggle", "kernels", "output", run["slug"], "-p", str(dest), "-o",
+                    "--file-pattern", r"(outputs\.tar\.gz|\.log)$"], capture_output=True, text=True, check=True,
+                   timeout=3600)
+    if (dest / "outputs.tar.gz").exists():
+        subprocess.run(["tar", "xzf", "outputs.tar.gz"], cwd=dest, check=True)
     logs = list(dest.glob("*.log"))
     events = json.loads(logs[0].read_text()) if logs else []
     run.update(status=status, finished=now(), output=str(dest.relative_to(HERE.parent)),

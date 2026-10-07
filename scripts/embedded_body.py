@@ -14,7 +14,13 @@ Resolution warning: at the default 8000 particles the SPH smoothing length is
 larger than the disc's scale height, so vertical structure is under-resolved.
 It demonstrates the pipeline; science runs want 10^6+ particles (Phantom).
 
-    python scripts/embedded_body.py [--n 8000] [--q 5e-3] [--orbits 1.5] [--out outputs/embedded_body] [--reuse]
+With ``--avg-orbits A``, ``--avg-snaps K`` snapshots are saved over the last A
+orbits and the lags are averaged over them, with their scatter as the error:
+a single snapshot's lag carries particle noise of several per cent.
+``--h-lp`` sets the lamppost height; with ``--reuse`` it only reprocesses.
+
+    python scripts/embedded_body.py [--n 8000] [--q 5e-3] [--orbits 1.5] [--avg-orbits 0] [--avg-snaps 10]
+                                    [--h-lp 10] [--out outputs/embedded_body] [--reuse]
 """
 
 from __future__ import annotations
@@ -40,7 +46,8 @@ H_R, FLARING = 0.05, 0.25   # H/R at 1 ld and its flaring index: a lamppost only
 WAV = np.array([1500.0, 3000.0, 5100.0, 8000.0])
 
 
-def run(q: float, n: int, orbits: float, r_body: float, seed: int = 3):
+def run(q: float, n: int, orbits: float, r_body: float, avg_orbits: float = 0.0, avg_snaps: int = 1,
+        seed: int = 3) -> list[Snapshot]:
     pos, vel, m = thin_disc(n, r_in=1.0, r_out=4.0, aspect_ratio=H_R, flaring_index=FLARING, sigma_slope=1.0,
                             disc_mass=1e-4, gas=True, seed=seed)
     bodies = MassiveBodies.central()
@@ -48,29 +55,28 @@ def run(q: float, n: int, orbits: float, r_body: float, seed: int = 3):
         bodies.add_circular(r_body, q, softening=0.5 * r_body * (q / 3) ** (1 / 3), name="embedded")
     sim = Simulation(bodies, pos, vel, m, potential=CentralPotential(), gas=SPHGas(SPHSettings(aspect_ratio=H_R, flaring_index=FLARING)),
                      r_accrete=0.8, eta_orbit=0.05)
-    t_end = orbits * 2 * np.pi * r_body**1.5
+    period = 2 * np.pi * r_body**1.5
+    t_end = orbits * period
     clock = time.time()
-    snap = sim.run(t_end, verbose=False)[-1]
-    print(f"  q = {q:g}: {len(snap.pos)} particles left, {time.time() - clock:.0f} s")
-    return snap
+    if avg_orbits > 0:
+        sim.run(t_end - avg_orbits * period, verbose=False)
+        # snapshots spread over the averaging window, the last at t_end
+        snaps = sim.run(t_end, snapshot_every=avg_orbits * period / avg_snaps, verbose=False)[1:]
+    else:
+        snaps = sim.run(t_end, verbose=False)[-1:]
+    print(f"  q = {q:g}: {len(snaps[-1].pos)} particles left, {len(snaps)} snapshot(s), {time.time() - clock:.0f} s")
+    return snaps
 
 
 def main(a):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     units = Units(M_BH)
-    phys = DiscPhysics(m_bh=M_BH, mdot=0.05, l_lamppost=3e43, h_lamppost_rg=10.0)
+    phys = DiscPhysics(m_bh=M_BH, mdot=0.05, l_lamppost=3e43, h_lamppost_rg=a.h_lp)
     obs = Observer(30.0, 75.0)
     surface_kw = dict(n_r=20, n_phi=32, kappa=0.4, min_count=6, smooth_phi=5, smooth_r=3)
 
-    results = {}
-    for q in (0.0, a.q):
-        path = out / f"snap_q{q:g}.npz"
-        if a.reuse and path.exists():
-            snap = Snapshot.load(path)
-        else:
-            snap = run(q, a.n, a.orbits, a.r_body)
-            snap.save(path)
+    def reprocess(snap):
         outer = snapshot_surface(snap, units, R_JOIN, 4.0, **surface_kw)
         # the simulation has no gas inside ~1 ld; put an analytic disc there with the
         # simulated disc's innermost H/R, so the UV comes from where it should
@@ -80,7 +86,23 @@ def main(a):
         surf = DiscSurface.stack(inner, outer)
         disc = irradiate(surf, phys)
         rs = response_functions(disc, obs, WAV, tau_max=10.0, n_tau=300, smooth_days=0.05)
-        results[q] = (snap, surf, disc, rs)
+        return surf, disc, rs
+
+    results, lags = {}, {}
+    for q in (0.0, a.q):
+        paths = sorted(out.glob(f"snap_q{q:g}_k*.npz")) or sorted(out.glob(f"snap_q{q:g}.npz"))
+        if a.reuse and paths:
+            snaps = [Snapshot.load(p) for p in paths]
+        else:
+            snaps = run(q, a.n, a.orbits, a.r_body, a.avg_orbits, a.avg_snaps)
+            if len(snaps) == 1:
+                snaps[0].save(out / f"snap_q{q:g}.npz")
+            else:
+                for k, snap in enumerate(snaps):
+                    snap.save(out / f"snap_q{q:g}_k{k:02d}.npz")
+        reproc = [reprocess(s) for s in snaps]
+        lags[q] = np.array([rs.mean_lag() for _, _, rs in reproc])
+        results[q] = (snaps[-1], *reproc[-1])
 
     fig, ax = plt.subplots(2, 3, figsize=(15, 9))
     for row, (q, (snap, surf, disc, rs)) in enumerate(results.items()):
@@ -104,9 +126,16 @@ def main(a):
         ax[row, 2].legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(out / "embedded_body.png", dpi=120)
-    lag0, lag1 = results[0.0][3].mean_lag(), results[a.q][3].mean_lag()
-    for w, l0, l1 in zip(WAV, lag0, lag1):
-        print(f"  {w:6.0f} A  <tau> no body {l0:5.2f} d   with body {l1:5.2f} d   ratio {l1 / l0:4.2f}")
+    l0, l1 = lags[0.0], lags[a.q]
+    n0, n1 = len(l0), len(l1)
+    ratio = l1.mean(0) / l0.mean(0)
+    # error of the ratio from the snapshot-to-snapshot scatter (standard error of each mean)
+    err = ratio * np.sqrt((l0.std(0, ddof=1) / np.sqrt(n0) / l0.mean(0)) ** 2
+                          + (l1.std(0, ddof=1) / np.sqrt(n1) / l1.mean(0)) ** 2) if min(n0, n1) > 1 else np.nan * ratio
+    print(f"  lamppost {a.h_lp:g} r_g; lags averaged over {n0} / {n1} snapshots")
+    for k, w in enumerate(WAV):
+        print(f"  {w:6.0f} A  <tau> no body {l0[:, k].mean():5.2f} d   with body {l1[:, k].mean():5.2f} d   "
+              f"ratio {ratio[k]:4.2f} +- {err[k]:4.2f}")
     print("wrote", out / "embedded_body.png")
 
 
@@ -116,6 +145,9 @@ if __name__ == "__main__":
     p.add_argument("--q", type=float, default=5e-3)
     p.add_argument("--orbits", type=float, default=1.5)
     p.add_argument("--r-body", type=float, default=2.2)
+    p.add_argument("--avg-orbits", type=float, default=0.0, help="average the lags over the last this many orbits")
+    p.add_argument("--avg-snaps", type=int, default=10, help="snapshots in the averaging window")
+    p.add_argument("--h-lp", type=float, default=10.0, help="lamppost height (r_g)")
     p.add_argument("--out", default="outputs/embedded_body")
     p.add_argument("--reuse", action="store_true", help="reuse saved snapshots in --out instead of re-running")
     main(p.parse_args())

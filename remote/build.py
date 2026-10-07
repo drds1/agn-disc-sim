@@ -37,8 +37,10 @@ CODE = sorted(p.relative_to(ROOT).as_posix() for p in [*(ROOT / "discsim").glob(
 BATCHES = {
     # smoke test, ~2 minutes: the pipeline end to end on a tiny disc
     "test": ["python scripts/embedded_body.py --n 3000 --orbits 0.3 --out outputs/test"],
-    # E2: embedded body vs none at higher resolution and for longer (each runs a q = 0 twin)
-    **{f"e2_q{tag}": [f"python scripts/embedded_body.py --n 30000 --orbits 8 --q {q} --out outputs/e2_q{tag}"]
+    # E2: embedded body vs none at higher resolution and for longer (each runs a q = 0 twin); lags averaged
+    # over 10 snapshots in the last orbit, which are kept for reprocessing (e.g. other lamppost heights)
+    **{f"e2_q{tag}": [f"python scripts/embedded_body.py --n 30000 --orbits 8 --q {q} --avg-orbits 1 "
+                      f"--avg-snaps 10 --out outputs/e2_q{tag}"]
        for tag, q in [("1e-3", 1e-3), ("5e-3", 5e-3), ("1e-2", 1e-2)]},
     # the README animation at higher resolution
     "anim_hires": ["python scripts/animate_disc.py --n 30000 --orbits 4 --frames 120 --out outputs/anim_hires "

@@ -40,7 +40,8 @@ def geometries():
         "rim (Starkey+23)": starkey2023(height=0.15, r_ref=R_OUT, beta=100.0),
         "ripples (Starkey+23)": starkey2023(height=0.03, r_ref=R_OUT, beta=1.0, ripple_amplitude=0.6,
                                              ripple_wavelength=1.0, ripple_slope=-3.0),
-        "2-arm spiral (5% of R)": spiral(0.05, m=2, pitch_deg=20.0, base=flared(0.01, 1.0, 9.0 / 8.0)),
+        # corrugation smaller than the base height, so the surface stays above the mid-plane
+        "2-arm spiral (±0.006 R)": spiral(0.006, m=2, pitch_deg=20.0, base=flared(0.01, 1.0, 9.0 / 8.0)),
     }
 
 
@@ -59,7 +60,10 @@ def main(out: Path, inclination: float = 30.0):
         f = sed(disc, obs, WAV)
         lag = rs.mean_lag()
         rows.append((name, lag, f, disc.lit.mean()))
-        ax[0, 0].plot(surf.r, surf.z[:, 0] / surf.r, label=name)
+        # solid where the lamppost lights the surface, faded where it is shadowed
+        hr = surf.z[:, 0] / surf.r
+        line, = ax[0, 0].plot(surf.r, np.where(disc.lit[:, 0], hr, np.nan), label=f"{name} (lit {disc.lit.mean():.0%})")
+        ax[0, 0].plot(surf.r, hr, color=line.get_color(), alpha=0.25, lw=1)
         ax[0, 1].plot(rs.tau, rs.psi[np.argmin(abs(WAV - 5100))], label=name)
         ax[1, 0].plot(WAV, lag, "o-", ms=3, label=name)
         ax[1, 1].plot(WAV, f, label=name)
@@ -68,7 +72,12 @@ def main(out: Path, inclination: float = 30.0):
 
     ax[1, 0].plot(WAV, thin_disc_lag(WAV, M_BH, MDOT, L_LP, 0.0, phys.h_lp_ld, x=3.36), "k--",
                   label="analytic thin disc (X=3.36)")
-    ax[0, 0].set(xscale="log", xlabel="R (light-days)", ylabel="H/R at azimuth 0", title="surface")
+    r = np.geomspace(phys.r_in_ld, R_OUT, 200)
+    ax[0, 0].plot(r, phys.h_lp_ld / r, "k:", lw=1.2, label=f"lamppost height / R ({phys.h_lamppost_rg:g} r$_g$)")
+    ax[0, 0].set(xscale="log", xlabel="R (light-days)", ylabel="H/R at azimuth 0", ylim=(-0.002, 0.04),
+                 title="surface (faded: in shadow)")
+    ax[0, 0].annotate("rim rises to\nH/R = 0.15 at 5 ld", xy=(R_OUT, 0.039), xytext=(1.6, 0.032), fontsize=7,
+                      arrowprops=dict(arrowstyle="->", lw=0.8))
     ax[0, 1].set(xlabel="delay (days)", ylabel="psi(tau), 5100 A", title=f"response, i = {inclination:.0f} deg",
                  xlim=(0, 8))
     ax[1, 0].set(xscale="log", yscale="log", xlabel="wavelength (A)", ylabel="mean delay (days)", title="lag spectrum")

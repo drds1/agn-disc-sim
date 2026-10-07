@@ -7,14 +7,14 @@ lag spectra, disc SEDs and mock light curves that
 
 ![Animated SPH disc with an embedded body: surface density, lit photosphere, response functions and side view](docs/images/disc_animation.gif)
 
-*`scripts/animate_disc.py`: 8000 SPH particles around a 5×10^7 M_⊙ black hole
-with an embedded body of mass ratio q = 5×10^-3 at 2.2 light-days, over four of
-its orbits (about 4.2 years). The body launches a spiral wake and starts to
-carve a horseshoe-shaped gap. Each frame is reprocessed as a frozen
-snapshot: the lit photosphere (dark where shadowed or optically thin) and the
-response functions at 1500, 5100 and 8000 Å (dotted: t = 0). The wobble in the
-optical responses (±0.1 d frame to frame) is particle noise at this
-resolution, not a measured effect.*
+*`scripts/animate_disc.py --n 30000` (run on Kaggle): SPH gas around a
+5×10^7 M_⊙ black hole with an embedded body of mass ratio q = 5×10^-3 at 2.2
+light-days, over four of its orbits (about 4.2 years). The body launches a
+spiral wake and starts to carve a horseshoe-shaped gap. Each frame is
+reprocessed as a frozen snapshot: the lit photosphere (dark where shadowed or
+optically thin) and the response functions at 1500, 5100 and 8000 Å (dotted:
+t = 0). The frame-to-frame wobble in the optical responses (±0.06 d at
+8000 Å) is particle noise at this resolution, not a measured effect.*
 
 The motivation is the **disc-size problem**. Continuum lags are 2–5× longer than
 a thin disc of the AGN's luminosity allows (see
